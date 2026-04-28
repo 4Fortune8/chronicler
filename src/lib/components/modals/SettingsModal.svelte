@@ -12,6 +12,8 @@
         headingFont,
         bodyFont,
         userFonts,
+        spellcheckEnabled,
+        customDictionary,
     } from "$lib/settingsStore";
     import { AVAILABLE_FONTS } from "$lib/themeRegistry";
     import { loadAllUserFonts } from "$lib/fonts";
@@ -101,6 +103,20 @@
     function handleChangeVault() {
         onClose();
         selectNewVault();
+    }
+
+    // --- Spell check helpers ---
+    let newWordInput = $state("");
+
+    function addSpellWord() {
+        const w = newWordInput.trim();
+        if (!w) return;
+        customDictionary.update((d) => (d.includes(w) ? d : [...d, w]));
+        newWordInput = "";
+    }
+
+    function removeSpellWord(word: string) {
+        customDictionary.update((d) => d.filter((w) => w !== word));
     }
 
     /**
@@ -302,6 +318,53 @@
             <h4>Import</h4>
             <p>Import .docx files from individual files or an entire folder.</p>
             <Button onclick={openImporter}>Open Importer</Button>
+        </div>
+
+        <div class="setting-item">
+            <h4>Spell check</h4>
+            <ToggleSwitch
+                id="spellcheck-toggle"
+                label="Enable spell check"
+                description="Underlines misspelled words in the page editor and infobox."
+                bind:checked={$spellcheckEnabled}
+            />
+            <!-- TODO: future expansion — language selector. v1 ships en_US only. -->
+            {#if $spellcheckEnabled}
+                <div class="custom-dict">
+                    <p class="dict-label">Custom dictionary</p>
+                    {#if $customDictionary.length === 0}
+                        <p class="dict-empty">No custom words yet.</p>
+                    {:else}
+                        <ul class="dict-list">
+                            {#each $customDictionary as word}
+                                <li class="dict-row">
+                                    <span>{word}</span>
+                                    <button
+                                        class="dict-remove"
+                                        onclick={() => removeSpellWord(word)}
+                                        title="Remove word">×</button
+                                    >
+                                </li>
+                            {/each}
+                        </ul>
+                    {/if}
+                    <div class="dict-add-row">
+                        <input
+                            type="text"
+                            class="form-input"
+                            placeholder="Add word..."
+                            bind:value={newWordInput}
+                            onkeydown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    addSpellWord();
+                                }
+                            }}
+                        />
+                        <Button onclick={addSpellWord}>Add</Button>
+                    </div>
+                </div>
+            {/if}
         </div>
 
         <div class="setting-item">
@@ -525,5 +588,53 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
+    }
+    .custom-dict {
+        margin-top: 0.75rem;
+    }
+    .dict-label {
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+    }
+    .dict-empty {
+        margin: 0 0 0.5rem 0;
+        color: var(--color-text-secondary);
+        font-style: italic;
+    }
+    .dict-list {
+        list-style: none;
+        padding: 0;
+        margin: 0 0 0.5rem 0;
+        max-height: 160px;
+        overflow-y: auto;
+        border: 1px solid var(--color-border-primary);
+        border-radius: 4px;
+    }
+    .dict-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.25rem 0.5rem;
+    }
+    .dict-row + .dict-row {
+        border-top: 1px solid var(--color-border-primary);
+    }
+    .dict-remove {
+        background: none;
+        border: none;
+        color: var(--color-text-secondary);
+        font-size: 1.1rem;
+        cursor: pointer;
+        line-height: 1;
+    }
+    .dict-remove:hover {
+        color: var(--color-error, #dc2626);
+    }
+    .dict-add-row {
+        display: flex;
+        gap: 0.5rem;
+    }
+    .dict-add-row .form-input {
+        flex: 1;
     }
 </style>

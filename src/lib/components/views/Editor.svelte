@@ -5,7 +5,7 @@
     import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
     import { yamlFrontmatter } from "@codemirror/lang-yaml";
     import { EditorView, keymap } from "@codemirror/view";
-    import { Prec } from "@codemirror/state";
+    import { Prec, Compartment } from "@codemirror/state";
     import {
         HighlightStyle,
         syntaxHighlighting,
@@ -31,9 +31,138 @@
     import EditorToolbar from "$lib/components/views/EditorToolbar.svelte";
     import { openModal, closeModal } from "$lib/modalStore";
     import InfoboxEditorModal from "$lib/components/infobox/InfoboxEditorModal.svelte";
+    import {
+        spellcheckEnabled,
+        customDictionary,
+    } from "$lib/settingsStore";
+    import { spellcheckExtension, findMisspelledAt } from "$lib/spellcheck/cmExtension";
+    import { getSpellChecker } from "$lib/spellcheck";
+    import ContextMenu from "$lib/components/ui/ContextMenu.svelte";
+    import type { ContextMenuItem } from "$lib/types";
 
     let { content = $bindable() } = $props<{ content?: string }>();
     let editor: EditorView | undefined = $state();
+
+    // Compartment lets us live-toggle the spellcheck extension without
+    // rebuilding the editor when the user flips the setting.
+    const spellcheckCompartment = new Compartment();
+
+    function buildSpellcheck(enabled: boolean) {
+        return enabled
+            ? spellcheckExtension(
+                  () => get(spellcheckEnabled),
+                  () => get(customDictionary),
+              )
+            : [];
+    }
+
+    // Right-click suggestion menu state.
+    let spellMenu: {
+        x: number;
+        y: number;
+        actions: ContextMenuItem[];
+    } | null = $state(null);
+
+    /**
+     * Dom event handler for contextmenu. Returns true if we handled it
+     * ourselves (a misspelled word at click position) so CM6 prevents the
+     * native browser menu.
+     */
+    function handleContextMenu(event: MouseEvent, view: EditorView): boolean {
+        if (!get(spellcheckEnabled)) return false;
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+        if (pos == null) return false;
+        const hit = findMisspelledAt(view, pos);
+        if (!hit) return false;
+
+        event.preventDefault();
+        // Open menu immediately with a "Loading…" placeholder; replace once
+        // suggestions arrive.
+        const x = event.clientX;
+        const y = event.clientY;
+        spellMenu = {
+            x,
+            y,
+            actions: [{ label: "Loading suggestions…", handler: () => {} }],
+        };
+
+        getSpellChecker()
+            .suggest(hit.word)
+            .then((suggestions) => {
+                if (!editor) return;
+                const top = suggestions.slice(0, 8);
+                const actions: ContextMenuItem[] = [];
+                if (top.length === 0) {
+                    actions.push({
+                        label: "(no suggestions)",
+                        handler: () => {},
+                    });
+                } else {
+                    for (const s of top) {
+                        actions.push({
+                            label: s,
+                            handler: () => {
+                                editor?.dispatch({
+                                    changes: {
+                                        from: hit.from,
+                                        to: hit.to,
+                                        insert: s,
+                                    },
+                                });
+                            },
+                        });
+                    }
+                }
+                actions.push({ isSeparator: true });
+                actions.push({
+                    label: "Add to dictionary",
+                    handler: () => {
+                        const w = hit.word;
+                        customDictionary.update((d) =>
+                            d.includes(w) ? d : [...d, w],
+                        );
+                    },
+                });
+                spellMenu = { x, y, actions };
+            });
+        return true;
+    }
+
+    // Extension that hooks contextmenu into the editor DOM.
+    const spellContextMenuExt = EditorView.domEventHandlers({
+        contextmenu(event, view) {
+            return handleContextMenu(event, view);
+        },
+    });
+
+    // Push the (possibly persisted) custom dictionary to the worker on mount,
+    // and reconfigure the editor whenever the spellcheck toggle flips or the
+    // custom dictionary grows.
+    let lastDictSize = 0;
+    $effect(() => {
+        const enabled = $spellcheckEnabled;
+        const dict = $customDictionary;
+        if (!editor) return;
+
+        // Reconfigure the compartment whenever enabled flips.
+        editor.dispatch({
+            effects: spellcheckCompartment.reconfigure(buildSpellcheck(enabled)),
+        });
+
+        if (enabled) {
+            const sc = getSpellChecker();
+            // First pass: send the whole list. Subsequent additions: just the
+            // new tail (avoids re-sending hundreds of words on every mutation).
+            if (lastDictSize === 0) {
+                sc.init(dict);
+            } else if (dict.length > lastDictSize) {
+                for (let i = lastDictSize; i < dict.length; i++) {
+                    sc.addWord(dict[i]);
+                }
+            }
+            lastDictSize = dict.length;
+        }
+    });
 
     onMount(() => {
         editor?.focus();
@@ -423,6 +552,9 @@
         syntaxHighlighting(chroniclerHighlightStyle),
 
         autocompletion({ override: [customCompletions] }),
+
+        spellcheckCompartment.of(buildSpellcheck(get(spellcheckEnabled))),
+        spellContextMenuExt,
     ];
 </script>
 
@@ -439,7 +571,20 @@
     </div>
 </div>
 
+{#if spellMenu}
+    <ContextMenu
+        x={spellMenu.x}
+        y={spellMenu.y}
+        actions={spellMenu.actions}
+        onClose={() => (spellMenu = null)}
+    />
+{/if}
+
 <style>
+    :global(.cm-misspelled) {
+        text-decoration: underline wavy var(--color-error, #dc2626);
+        text-decoration-skip-ink: none;
+    }
     .editor-container {
         display: flex;
         flex-direction: column;

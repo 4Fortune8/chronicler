@@ -4,6 +4,7 @@
     import AutocompleteInput from "$lib/components/ui/AutocompleteInput.svelte";
     import Button from "$lib/components/ui/Button.svelte";
     import { tags as worldTags } from "$lib/worldStore";
+    import { spellcheckEnabled } from "$lib/settingsStore";
 
     let {
         title = $bindable(),
@@ -61,6 +62,7 @@
             bind:value={title}
             placeholder="Page Title"
             class="form-input"
+            spellcheck={$spellcheckEnabled}
         />
     </div>
     <div class="form-group">
@@ -71,6 +73,7 @@
             bind:value={subtitle}
             placeholder="Subtitle"
             class="form-input"
+            spellcheck={$spellcheckEnabled}
         />
     </div>
 

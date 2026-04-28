@@ -4,6 +4,7 @@
     import Icon from "$lib/components/ui/Icon.svelte";
     import SearchableSelect from "$lib/components/ui/SearchableSelect.svelte";
     import InfoboxColumnInput from "$lib/components/infobox/InfoboxColumnInput.svelte";
+    import { spellcheckEnabled } from "$lib/settingsStore";
 
     let {
         layoutRules = $bindable(),
@@ -77,6 +78,7 @@
                                 bind:value={rule.text}
                                 placeholder="Header Text"
                                 aria-label="Header Text"
+                                spellcheck={$spellcheckEnabled}
                             />
                             <div class="rule-position-row">
                                 <div style="min-width: 200px;">
@@ -105,6 +107,7 @@
                                 bind:value={rule.text}
                                 placeholder="Display Name"
                                 aria-label="Display Name"
+                                spellcheck={$spellcheckEnabled}
                             />
                             <span class="rule-label">Fields to rename</span>
                             <InfoboxColumnInput

@@ -1,6 +1,7 @@
 <script lang="ts">
     import { resolveImageSource } from "$lib/utils";
     import { imagePathLookup, vaultPath } from "$lib/worldStore";
+    import { spellcheckEnabled } from "$lib/settingsStore";
     import AutocompleteInput from "$lib/components/ui/AutocompleteInput.svelte";
     import Icon from "$lib/components/ui/Icon.svelte";
     import type { ImageEntry } from "$lib/infobox";
@@ -84,6 +85,7 @@
             class="form-input"
             bind:value={image.caption}
             placeholder="Caption..."
+            spellcheck={$spellcheckEnabled}
         />
     </div>
 

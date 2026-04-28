@@ -2,6 +2,14 @@
 
 ---
 
+## [Unreleased]
+
+### ✨ Added
+
+- **Spell check**: Added an offline, per-vault spell checker. The page editor now underlines misspelled prose words while skipping code blocks, inline code, wikilinks, URLs, links, and frontmatter; right-clicking a misspelled word opens a suggestions menu with an "Add to dictionary" option. Infobox prose fields (titles, subtitles, captions, field values, header text, alias display names) use the OS-native spell checker. Toggle and a custom dictionary editor live in Settings → Spell check. English (en_US) ships bundled.
+
+---
+
 ## [v0.49.2-alpha] - 2026-04-21
 
 ### ✨ Added

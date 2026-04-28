@@ -5,6 +5,7 @@
      * Automatically detects `[[` and `![[` triggers.
      */
     import { allFileTitles, allImageFiles } from "$lib/worldStore";
+    import { spellcheckEnabled } from "$lib/settingsStore";
     import FloatingMenu from "$lib/components/ui/FloatingMenu.svelte";
     import {
         ListNavigator,
@@ -126,6 +127,7 @@
             {placeholder}
             rows="2"
             class="form-input"
+            spellcheck={$spellcheckEnabled}
             oninput={handleInput}
             onkeydown={handleKeydown}
         ></textarea>
@@ -137,6 +139,7 @@
             type="text"
             {placeholder}
             class="form-input"
+            spellcheck={$spellcheckEnabled}
             oninput={handleInput}
             onkeydown={handleKeydown}
         />
