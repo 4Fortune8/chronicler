@@ -353,6 +353,14 @@
     }
 
     // Define custom keybindings
+    const spellcheckTheme = EditorView.baseTheme({
+        ".cm-misspelled": {
+            textDecoration: "underline wavy #dc2626",
+            textDecorationSkipInk: "none",
+            textDecorationThickness: "2px",
+        },
+    });
+
     const customKeymap = [
         {
             key: "Mod-b",
@@ -555,6 +563,7 @@
 
         spellcheckCompartment.of(buildSpellcheck(get(spellcheckEnabled))),
         spellContextMenuExt,
+        spellcheckTheme,
     ];
 </script>
 
@@ -582,8 +591,10 @@
 
 <style>
     :global(.cm-misspelled) {
-        text-decoration: underline wavy var(--color-error, #dc2626);
+        text-decoration: underline wavy #dc2626 !important;
         text-decoration-skip-ink: none;
+        -webkit-text-decoration: underline wavy #dc2626 !important;
+        text-decoration-thickness: 2px;
     }
     .editor-container {
         display: flex;

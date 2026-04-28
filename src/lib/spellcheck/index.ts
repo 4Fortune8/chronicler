@@ -7,7 +7,7 @@
  */
 
 import { browser } from "$app/environment";
-import SpellWorker from "./worker.ts?worker";
+import SpellWorker from "./worker?worker";
 
 type CheckResponse = { type: "check"; id: number; misspelled: string[] };
 type SuggestResponse = {
@@ -45,7 +45,7 @@ class SpellCheckerClient {
                 this.suggests.get(msg.id)?.resolve(msg.suggestions);
                 this.suggests.delete(msg.id);
             }
-            // 'ready' is currently informational only.
+            // 'ready' is informational only.
         });
         this.worker = w;
         return w;

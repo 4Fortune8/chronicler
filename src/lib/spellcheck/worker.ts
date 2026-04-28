@@ -34,11 +34,16 @@ async function getChecker(): Promise<ReturnType<typeof nspell>> {
 
     loadingPromise = (async () => {
         const [aff, dic] = await Promise.all([
-            fetch("/dictionaries/en_US/en_US.aff").then((r) => r.text()),
-            fetch("/dictionaries/en_US/en_US.dic").then((r) => r.text()),
+            fetch("/dictionaries/en_US/en_US.aff").then((r) => {
+                if (!r.ok) throw new Error("aff fetch " + r.status);
+                return r.text();
+            }),
+            fetch("/dictionaries/en_US/en_US.dic").then((r) => {
+                if (!r.ok) throw new Error("dic fetch " + r.status);
+                return r.text();
+            }),
         ]);
         const c = nspell(aff, dic);
-        // Drain anything that arrived before the dictionary finished loading.
         while (pendingCustom.length) {
             const w = pendingCustom.shift()!;
             c.add(w);

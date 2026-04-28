@@ -10,6 +10,7 @@ fn main() {
         println!("cargo:rustc-env=KEYGEN_PRODUCT_TOKEN={}", token);
     } else {
         println!("cargo:warning=❌ KEYGEN_PRODUCT_TOKEN was not set in the build environment.");
+        println!("cargo:rustc-env=KEYGEN_PRODUCT_TOKEN=dev-keygen-token-placeholder");
     }
 
     // --- Handle LICENSE_SECRET ---
@@ -17,6 +18,7 @@ fn main() {
         println!("cargo:rustc-env=LICENSE_SECRET={}", secret);
     } else {
         println!("cargo:warning=❌ LICENSE_SECRET was not set in the build environment.");
+        println!("cargo:rustc-env=LICENSE_SECRET=dev-license-secret-placeholder");
     }
 
     // --- Handle CHRONICLER_ANALYTICS_SALT ---
