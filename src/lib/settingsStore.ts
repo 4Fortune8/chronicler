@@ -62,6 +62,8 @@ interface VaultSettings {
     isTocVisible: boolean;
     areInfoboxTagsVisible: boolean;
     areFooterTagsVisible: boolean;
+    spellcheckEnabled: boolean;
+    customDictionary: string[];
 }
 
 export type ThemeName = string;
@@ -123,6 +125,8 @@ export const sidebarWidth = writable<number>(SIDEBAR_INITIAL_WIDTH);
 export const isTocVisible = writable<boolean>(true); // Default to visible
 export const areInfoboxTagsVisible = writable<boolean>(true);
 export const areFooterTagsVisible = writable<boolean>(false);
+export const spellcheckEnabled = writable<boolean>(true);
+export const customDictionary = writable<string[]>([]);
 
 // --- Helper: Migration Logic ---
 
@@ -210,6 +214,8 @@ async function saveVaultSettings() {
         isTocVisible: get(isTocVisible),
         areInfoboxTagsVisible: get(areInfoboxTagsVisible),
         areFooterTagsVisible: get(areFooterTagsVisible),
+        spellcheckEnabled: get(spellcheckEnabled),
+        customDictionary: get(customDictionary),
     };
     await vaultSettingsFile.set("vaultSettings", settings);
     await vaultSettingsFile.save();
@@ -284,6 +290,8 @@ export async function initializeVaultSettings(vaultPath: string) {
         isTocVisible.set(settings.isTocVisible ?? true); // Fallback to true
         areInfoboxTagsVisible.set(settings.areInfoboxTagsVisible ?? true);
         areFooterTagsVisible.set(settings.areFooterTagsVisible ?? true);
+        spellcheckEnabled.set(settings.spellcheckEnabled ?? true);
+        customDictionary.set(settings.customDictionary ?? []);
     } else {
         // If the vault has no settings file, it should adopt the current theme.
         // We immediately save the current settings to create the vault file,
@@ -302,6 +310,8 @@ export async function initializeVaultSettings(vaultPath: string) {
         isTocVisible.subscribe(debouncedVaultSave),
         areInfoboxTagsVisible.subscribe(debouncedVaultSave),
         areFooterTagsVisible.subscribe(debouncedVaultSave),
+        spellcheckEnabled.subscribe(debouncedVaultSave),
+        customDictionary.subscribe(debouncedVaultSave),
     ];
 }
 
@@ -323,6 +333,8 @@ export function destroyVaultSettings() {
     isTocVisible.set(true); // Reset to default
     areInfoboxTagsVisible.set(true);
     areFooterTagsVisible.set(true);
+    spellcheckEnabled.set(true);
+    customDictionary.set([]);
 
     // Reset atmosphere to defaults so next vault starts fresh if unconfigured
     atmosphere.set(defaultAtmosphere);
