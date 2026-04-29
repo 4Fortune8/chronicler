@@ -1,11 +1,10 @@
 /**
  * @file CodeMirror 6 extension that underlines misspelled words.
  *
- * Walks the visible viewport, uses the markdown Lezer tree to skip code,
- * URLs, links, frontmatter, etc., subtracts wikilink ranges with a regex,
- * tokenizes the remaining prose into words, and asks the worker which are
- * misspelled. Misspellings become Decoration.mark ranges with class
- * 'cm-misspelled'.
+ * Only checks text inside double- or single-quoted string values, or inside
+ * the body of <p>, <div>, and <h1>-<h6> HTML elements. Wikilinks are still
+ * subtracted from those ranges. Misspellings become Decoration.mark ranges
+ * with class 'cm-misspelled'.
  */
 
 import {
@@ -16,31 +15,20 @@ import {
     type ViewUpdate,
 } from "@codemirror/view";
 import { StateField, StateEffect, RangeSetBuilder } from "@codemirror/state";
-import { syntaxTree } from "@codemirror/language";
 import { getSpellChecker } from "./index";
-
-/** Lezer markdown node names whose contents should NOT be spell-checked. */
-const SKIP_NODE_TYPES = new Set([
-    "FencedCode",
-    "CodeBlock",
-    "InlineCode",
-    "CodeText",
-    "URL",
-    "Link",
-    "Image",
-    "HTMLTag",
-    "HTMLBlock",
-    "ProcessingInstruction",
-    "CommentBlock",
-    "FrontMatterMark",
-    "Frontmatter",
-    "FrontMatter",
-    "YAMLcontent",
-    "yamlFrontmatter",
-]);
 
 const WORD_RE = /\p{L}[\p{L}\p{M}'\u2019]*/gu;
 const WIKILINK_RE = /\[\[[^\]]+\]\]/g;
+
+// Quoted string values: "..." or '...'. Non-greedy; no embedded newlines so
+// stray quotes don't run away across the document. Backslash escapes are
+// honored so escaped quotes don't terminate the value.
+const QUOTED_RE = /"((?:\\.|[^"\\\n])*)"|'((?:\\.|[^'\\\n])*)'/g;
+
+// Body of <p>, <div>, or <h1>-<h6>. Multiline, case-insensitive. Captures the
+// inner text only (group 2) so the tags themselves aren't checked.
+const HTML_BLOCK_RE =
+    /<(p|div|h[1-6])\b[^>]*>([\s\S]*?)<\/\1\s*>/gi;
 
 const setMisspellings = StateEffect.define<{
     ranges: { from: number; to: number }[];
@@ -79,33 +67,47 @@ const misspelledField = StateField.define<DecorationSet>({
 
 /**
  * Walk the visible viewport, returning prose ranges (start/end document
- * offsets) that exclude code/links/URLs/frontmatter. Wikilinks are subtracted
- * via a regex pass since the markdown parser doesn't model them as nodes.
+ * offsets) that lie inside quoted string values or inside the body of
+ * <p>/<div>/<h1>-<h6> HTML elements. Wikilinks are subtracted via a regex
+ * pass.
  */
 function collectProseRanges(view: EditorView): SpellcheckRange[] {
     const ranges: SpellcheckRange[] = [];
-    const tree = syntaxTree(view.state);
     const doc = view.state.doc;
 
     for (const { from, to } of view.visibleRanges) {
-        // Start with the whole visible range as prose, then carve out skip
-        // nodes.
-        const skips: SpellcheckRange[] = [];
-        tree.iterate({
-            from,
-            to,
-            enter: (node) => {
-                if (SKIP_NODE_TYPES.has(node.name)) {
-                    skips.push({ from: node.from, to: node.to });
-                    return false;
-                }
-            },
-        });
-
-        // Subtract wikilinks via regex.
         const text = doc.sliceString(from, to);
-        WIKILINK_RE.lastIndex = 0;
+
+        const includes: SpellcheckRange[] = [];
+
+        // Quoted-string values.
+        QUOTED_RE.lastIndex = 0;
         let m: RegExpExecArray | null;
+        while ((m = QUOTED_RE.exec(text))) {
+            // Inner content sits between the surrounding quote marks.
+            const innerFrom = from + m.index + 1;
+            const innerTo = from + m.index + m[0].length - 1;
+            if (innerTo > innerFrom) {
+                includes.push({ from: innerFrom, to: innerTo });
+            }
+        }
+
+        // <p>, <div>, <h1>-<h6> bodies.
+        HTML_BLOCK_RE.lastIndex = 0;
+        while ((m = HTML_BLOCK_RE.exec(text))) {
+            const openLen = m[0].indexOf(m[2]);
+            const innerFrom = from + m.index + openLen;
+            const innerTo = innerFrom + m[2].length;
+            if (innerTo > innerFrom) {
+                includes.push({ from: innerFrom, to: innerTo });
+            }
+        }
+
+        if (includes.length === 0) continue;
+
+        // Subtract wikilinks.
+        const skips: SpellcheckRange[] = [];
+        WIKILINK_RE.lastIndex = 0;
         while ((m = WIKILINK_RE.exec(text))) {
             skips.push({
                 from: from + m.index,
@@ -113,27 +115,36 @@ function collectProseRanges(view: EditorView): SpellcheckRange[] {
             });
         }
 
-        // Merge skip ranges and emit the gaps.
-        skips.sort((a, b) => a.from - b.from);
-        const merged: SpellcheckRange[] = [];
-        for (const s of skips) {
-            const last = merged[merged.length - 1];
-            if (last && s.from <= last.to) {
-                last.to = Math.max(last.to, s.to);
+        // Merge & sort includes.
+        includes.sort((a, b) => a.from - b.from);
+        const mergedIncl: SpellcheckRange[] = [];
+        for (const r of includes) {
+            const last = mergedIncl[mergedIncl.length - 1];
+            if (last && r.from <= last.to) {
+                last.to = Math.max(last.to, r.to);
             } else {
-                merged.push({ ...s });
+                mergedIncl.push({ ...r });
             }
         }
 
-        let cursor = from;
-        for (const s of merged) {
-            if (s.from > cursor) {
-                ranges.push({ from: cursor, to: Math.min(s.from, to) });
+        // Subtract skip ranges from each include.
+        skips.sort((a, b) => a.from - b.from);
+        for (const incl of mergedIncl) {
+            let cursor = incl.from;
+            for (const s of skips) {
+                if (s.to <= cursor) continue;
+                if (s.from >= incl.to) break;
+                if (s.from > cursor) {
+                    ranges.push({
+                        from: cursor,
+                        to: Math.min(s.from, incl.to),
+                    });
+                }
+                cursor = Math.max(cursor, s.to);
+                if (cursor >= incl.to) break;
             }
-            cursor = Math.max(cursor, s.to);
-            if (cursor >= to) break;
+            if (cursor < incl.to) ranges.push({ from: cursor, to: incl.to });
         }
-        if (cursor < to) ranges.push({ from: cursor, to });
     }
     return ranges;
 }
